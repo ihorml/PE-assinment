@@ -1,46 +1,46 @@
 # PE Task — Sandbox
 
-90-минутное живое задание. Полный бриф — в `TASK.md`.
+90-minute live exercise. The full brief is in `TASK.md`.
 
-## Запуск
+## Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-Откроется на http://localhost:5173
+Opens at http://localhost:5173
 
-## Что внутри
+## What's inside
 
-- Vite 5 + React 18 + TypeScript
-- Никаких UI-библиотек не предустановлено — ставь что хочешь (`npm install ...`)
-- `src/App.tsx` — entry point, начинай отсюда (там стоит дефолтный Vite-стартер, удали и пиши своё)
-- `src/main.tsx` — bootstrap, трогать не нужно
-- `TASK.md` — описание задачи (открой первым)
-- `reference/` — материалы по задаче (если приложены)
+- Vite + React + TypeScript scaffold
+- No UI libraries pre-installed — bring whatever you want (`npm install ...`)
+- `src/App.tsx` — entry point, start here (the default Vite starter is in there; delete it and write your own)
+- `src/main.tsx` — bootstrap, no need to touch
+- `TASK.md` — task description (read this first)
+- `reference/` — task materials (if attached)
 
-## Структура — на твоё усмотрение
+## Structure — your call
 
-Раскладывай файлы как считаешь правильным: компоненты, хуки, стейт, стили — твой выбор.
+Lay out files however you think is right: components, hooks, state, styling — your choice.
 
-## AI-инструменты
+## AI tools
 
-Используй как обычно. Это часть теста, не "запрещённый чит". Если у тебя есть свои промпты / правила / cursorrules — подключай их.
+Use them as you normally would. This is part of the test, not "forbidden cheating". If you have your own prompts / rules / cursorrules — bring them along.
 
-Единственная просьба: **не сворачивай AI-сайдбар** во время сессии. Нам интересно видеть как ты с ним общаешься.
+One request: **don't collapse the AI sidebar** during the session. We want to see how you talk to it.
 
-## Полезные мелочи
+## Useful bits
 
-- **Mock endpoint для upload:** `https://httpbin.org/post` (принимает любой POST, возвращает что отправил)
-- **Mobile-viewport в браузере:** DevTools → Toggle device toolbar (Cmd+Shift+M) → iPhone 12 Pro = 390px
-- **Hot reload** работает из коробки — сохраняй и обновляй
-- **TypeScript-ошибки** в браузере: открой DevTools console + терминал dev-сервера
+- **Mock endpoint for upload:** `https://httpbin.org/post` (accepts any POST, echoes back what you sent)
+- **Mobile viewport in the browser:** DevTools → Toggle device toolbar (Cmd+Shift+M) → iPhone 12 Pro = 390px
+- **Hot reload** works out of the box — save and the page updates
+- **TypeScript errors** show up in the browser DevTools console and the dev server terminal
 
 ## Git
 
-Коммитить можно, но не обязательно. Если коммитишь — пиши осмысленные сообщения, мы будем смотреть историю.
+Commits are welcome but not required. If you do commit — write meaningful messages, we'll skim the history.
 
-## Если что-то сломалось
+## If something breaks
 
-Скажи нам. **Не молчи и не борись с node_modules в одиночку** — это съедает время сессии. Если зависнет dev-сервер, не запустится npm, ошибка типов — крикни, поможем.
+Tell us. **Don't suffer in silence fighting `node_modules`** — that eats your session time. Dev server stuck, npm won't run, type errors won't go away — shout, we'll help.

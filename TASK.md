@@ -1,52 +1,51 @@
 # PE Interview — Live Coding Session
 
-## Формат
+## Format
 
-- **90 минут** работы + 20 минут обсуждения после
-- Шеринг экрана, твой обычный setup (Cursor / Claude Code / любой)
-- Первые ~15 минут — обсуждаем подход, задаёшь вопросы, рассказываешь как будешь решать. Мы играем за продакта / стейкхолдера
-- Потом строишь то, что спроектировал
-- Вопросы приветствуются в любой момент — задавай столько, сколько нужно
+- **90 minutes** of work + 20 minutes of discussion afterwards
+- Screen sharing, your usual setup (Cursor / Claude Code / whatever)
+- First ~15 minutes — we discuss your approach: you ask questions, walk us through how you plan to solve it. We play product / stakeholders
+- Then you build what you designed
+- Questions are welcome at any time — ask as many as you need
 
-## Проблема
+## The problem
 
-Часть пользователей делает депозит через UPI, но автоматический матчинг платежа на нашей стороне не срабатывает — деньги "повисают". Сейчас ops-команда ничего не может с этим сделать: нет способа попросить пользователя самостоятельно подтвердить транзакцию.
+Some of our users make deposits via UPI, but the automatic payment matching on our side fails — their money gets "stuck". Right now the ops team has no way to help them: there's no flow for the user to confirm the transaction themselves.
 
-**Что нужно:** standalone веб-страница на отдельном домене. Оператор отправляет туда пользователя ссылкой в чате. На этой странице пользователь:
+**What we need:** a standalone web page on a separate domain. An operator sends the user there via a chat link. On this page, the user:
 
-- сообщает свой User ID (чтобы мы поняли, чью транзакцию подтверждаем)
-- прикладывает скриншот UPI-платежа
-- видит, что происходит с его запросом
-- получает итоговый статус
+- provides their User ID (so we know whose transaction we're confirming)
+- attaches a screenshot of the UPI payment
+- sees what's happening with their request
+- gets the final status
 
-**V1:** только клиент, без бэкенд-интеграции. Файл уходит на endpoint (мокаешь как удобно).
+**V1:** client-side only, no backend integration. The file is sent to a predefined endpoint (mock it however you like).
 
-Дальше — **твоё решение:** сколько экранов, какой флоу, какие состояния, что показывать на каждом шаге, какие edge cases ловить, как это всё выглядит. Мы здесь как стейкхолдеры — спрашивай что нужно.
+The rest — **your decisions:** how many screens, what flow, what states, what to show at each step, what edge cases to handle, how it all looks. We're here as stakeholders — ask whatever you need.
 
-## Технические рамки
+## Technical constraints
 
-- Пустая Vite репка (`React + TS`), без UI-библиотек — ставь что хочешь
-- Тёмная тема (наш бренд — финтех, серьёзно выглядим)
-- Mobile-first: пользователи приходят с телефона
-- 90 минут — скоупь сам, что shipnуть за это время
+- Empty Vite repo (`React + TS`), no UI library pre-installed — bring whatever you want
+- Dark theme (our brand is fintech, we look serious)
+- Mobile-first: users come in from a phone
+- 90 minutes — scope it yourself, decide what to ship
 
-## Как мы оцениваем
+## How we evaluate
 
-Главное — **процесс**, не финальный пиксель. Дивимся на:
+The main thing is the **process**, not the final pixel. We look at:
 
-- Какие вопросы задаёшь до того, как начать кодить
-- Как декомпозируешь задачу и расставляешь приоритеты
-- Как работаешь с AI: даёшь контекст, проверяешь output, споришь с агентом когда не согласен
-- Что замечаешь сам (edge cases, UX-моменты, продуктовые риски), а что — нет
-- Что успеваешь сделать за 90 минут vs что отбрасываешь и почему
+- What questions you ask before you start coding
+- How you decompose the task and set priorities
+- How you work with AI: how you give it context, verify its output, push back when you disagree
+- What you notice on your own (edge cases, UX moments, product risks), and what you miss
+- What you ship in 90 minutes vs what you cut and why
 
-**Работай как обычно.** Гугли, читай доки, спорь с агентом, переделывай — всё нормально.
+**Work the way you normally work.** Google things, read docs, argue with the agent, rewrite — all fine.
 
-## Запуск
+## Running it
 
 ```bash
-cd pe-task
 npm install
 npm run dev
-# открой localhost:5173
+# open localhost:5173
 ```
