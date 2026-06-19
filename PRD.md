@@ -42,9 +42,18 @@ Three things:
 |-------|-------|
 | **Email** | Communication channel. Required. |
 | **Merchant-client-id** | The shop's internal id for this user. Labeled **"Your user"**. Required. |
-| **Evidence photo** | The screenshot. Required. |
+| **Evidence photo(s)** | One or more screenshots. Required. |
 
 Plus a **Submit** button.
+
+### Screenshot instructions
+
+Next to the photo field, tell the user what the screenshot must clearly show so
+the auto-matcher can read it:
+
+- **Date & time** clearly visible
+- **Amount** present
+- **UPI transaction ID**
 
 ### Pre-fill from URL
 
