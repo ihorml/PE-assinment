@@ -1,0 +1,1 @@
+1. After each implementation commit all the changes so we can easily jump back<->forward between your changes
