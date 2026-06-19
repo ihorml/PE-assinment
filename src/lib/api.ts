@@ -9,7 +9,8 @@
 // `?mock=approved|needs_evidence|ticket` URL parameter.
 
 const MOCK_ENDPOINT = 'https://httpbin.org/post'
-const PROCESSING_MS = 2500
+// Long enough to watch the fake progress stepper run through its steps.
+const PROCESSING_MS = 10000
 
 export type MatchResult =
   | { status: 'approved' }
