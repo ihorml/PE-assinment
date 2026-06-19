@@ -5,7 +5,12 @@ import {
   motion,
   useAnimationControls,
 } from 'framer-motion'
-import { submitEvidence, type MatchResult } from './lib/api'
+import {
+  createTicket,
+  submitReport,
+  type Mode,
+  type ReportInput,
+} from './lib/api'
 import { readPrefill } from './lib/prefill'
 import {
   buttonMotion,
@@ -19,15 +24,35 @@ import {
   resultCardVariants,
   shakeKeyframes,
   staggerItem,
+  tabVariants,
 } from './lib/motion'
+
+type FormValues = {
+  email: string
+  merchantClientId: string
+  evidence: File[]
+  datetime: string
+  upi: string
+  amount: string
+  description: string
+}
 
 type Errors = {
   email?: string
   merchantClientId?: string
   evidence?: string
+  datetime?: string
+  upi?: string
+  amount?: string
 }
 
-type Phase = 'form' | 'submitting' | 'result'
+type Phase = 'form' | 'processing' | 'result'
+type ProcessingKind = 'match' | 'ticket'
+
+type ResultState =
+  | { kind: 'approved' }
+  | { kind: 'unmatched'; mode: Mode }
+  | { kind: 'ticket'; ticketId: string }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MAX_FILE_MB = 10
@@ -36,8 +61,8 @@ const MAX_FILE_MB = 10
 // The last step intentionally never auto-completes — it holds until the real
 // response arrives and swaps this screen out.
 const PROCESSING_STEPS = [
-  'Uploading your screenshot',
-  'Scanning the image',
+  'Uploading your details',
+  'Scanning for a match',
   'Reading payment details',
   'Searching for your payment',
   'Verifying the transaction',
@@ -48,29 +73,35 @@ const PROCESSING_STEPS = [
 // ~5-minute budget, raise this to ~45000 (≈45s/step).
 const STEP_INTERVAL_MS = 1400
 
-function validate(values: {
-  email: string
-  merchantClientId: string
-  evidence: File[]
-}): Errors {
+function validate(v: FormValues, mode: Mode): Errors {
   const errors: Errors = {}
 
-  if (!values.email.trim()) {
+  if (!v.email.trim()) {
     errors.email = 'Email is required'
-  } else if (!EMAIL_RE.test(values.email.trim())) {
+  } else if (!EMAIL_RE.test(v.email.trim())) {
     errors.email = 'Enter a valid email address'
   }
 
-  if (!values.merchantClientId.trim()) {
+  if (!v.merchantClientId.trim()) {
     errors.merchantClientId = 'This is required'
   }
 
-  if (values.evidence.length === 0) {
-    errors.evidence = 'Please attach at least one screenshot'
-  } else if (values.evidence.some((f) => !f.type.startsWith('image/'))) {
-    errors.evidence = 'Every file must be an image'
-  } else if (values.evidence.some((f) => f.size > MAX_FILE_MB * 1024 * 1024)) {
-    errors.evidence = `Each image must be under ${MAX_FILE_MB} MB`
+  if (mode === 'screenshot') {
+    if (v.evidence.length === 0) {
+      errors.evidence = 'Please attach at least one screenshot'
+    } else if (v.evidence.some((f) => !f.type.startsWith('image/'))) {
+      errors.evidence = 'Every file must be an image'
+    } else if (v.evidence.some((f) => f.size > MAX_FILE_MB * 1024 * 1024)) {
+      errors.evidence = `Each image must be under ${MAX_FILE_MB} MB`
+    }
+  } else {
+    if (!v.datetime) errors.datetime = 'Please add the date & time'
+    if (!v.upi.trim()) errors.upi = 'Please add the UPI transaction ID'
+    if (!v.amount.trim()) {
+      errors.amount = 'Please add the amount'
+    } else if (!(Number(v.amount) > 0)) {
+      errors.amount = 'Enter a valid amount'
+    }
   }
 
   return errors
@@ -79,21 +110,50 @@ function validate(values: {
 function App() {
   const prefill = useMemo(readPrefill, [])
 
-  const [email, setEmail] = useState(prefill.email)
-  const [merchantClientId, setMerchantClientId] = useState(prefill.merchantClientId)
-  const [evidence, setEvidence] = useState<File[]>([])
+  const [mode, setMode] = useState<Mode>('screenshot')
+  const [form, setForm] = useState<FormValues>(() => ({
+    email: prefill.email,
+    merchantClientId: prefill.merchantClientId,
+    evidence: [],
+    datetime: '',
+    upi: '',
+    amount: '',
+    description: '',
+  }))
   const [errors, setErrors] = useState<Errors>({})
   // Bumped on a failed submit so fields with errors can shake.
   const [shakeNonce, setShakeNonce] = useState(0)
 
   const [phase, setPhase] = useState<Phase>('form')
-  const [result, setResult] = useState<MatchResult | null>(null)
+  const [processingKind, setProcessingKind] = useState<ProcessingKind>('match')
+  const [result, setResult] = useState<ResultState | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  // Live re-validation: recompute only fields that are *already* showing an
+  // error, so fixing a bad value clears it on the keystroke that fixes it —
+  // without popping new errors on fields the user hasn't finished typing.
+  function setField<K extends keyof FormValues>(key: K, value: FormValues[K]) {
+    const next = { ...form, [key]: value }
+    setForm(next)
+    setErrors((prev) => {
+      if (Object.keys(prev).length === 0) return prev
+      const fresh = validate(next, mode)
+      const out: Errors = {}
+      for (const k of Object.keys(prev) as (keyof Errors)[]) {
+        if (fresh[k]) out[k] = fresh[k]
+      }
+      return out
+    })
+  }
+
+  function changeMode(next: Mode) {
+    setMode(next)
+    setErrors({}) // drop the other mode's errors when switching
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const values = { email, merchantClientId, evidence }
-    const nextErrors = validate(values)
+    const nextErrors = validate(form, mode)
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) {
       setShakeNonce((n) => n + 1)
@@ -101,14 +161,11 @@ function App() {
     }
 
     setSubmitError(null)
-    setPhase('submitting')
+    setProcessingKind('match')
+    setPhase('processing')
     try {
-      const r = await submitEvidence({
-        email: email.trim(),
-        merchantClientId: merchantClientId.trim(),
-        evidence,
-      })
-      setResult(r)
+      const r = await submitReport(reportInput(form, mode))
+      setResult(r.status === 'approved' ? { kind: 'approved' } : { kind: 'unmatched', mode })
       setPhase('result')
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong')
@@ -116,47 +173,34 @@ function App() {
     }
   }
 
-  // Live re-validation: recompute only fields that are *already* showing an
-  // error, so fixing a bad value clears it on the keystroke that fixes it —
-  // without popping new errors on fields the user hasn't finished typing.
-  function revalidate(next: {
-    email: string
-    merchantClientId: string
-    evidence: File[]
-  }) {
-    setErrors((prev) => {
-      if (Object.keys(prev).length === 0) return prev
-      const fresh = validate(next)
-      const out: Errors = {}
-      for (const key of Object.keys(prev) as (keyof Errors)[]) {
-        if (fresh[key]) out[key] = fresh[key]
-      }
-      return out
-    })
+  // Escalate an unmatched manual report to the support team → creates a ticket.
+  async function escalate() {
+    setProcessingKind('ticket')
+    setPhase('processing')
+    try {
+      const { ticketId } = await createTicket(reportInput(form, 'manual'))
+      setResult({ kind: 'ticket', ticketId })
+      setPhase('result')
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Something went wrong')
+      setPhase('result') // keep the unmatched screen so they can retry
+    }
   }
 
-  function changeEmail(value: string) {
-    setEmail(value)
-    revalidate({ email: value, merchantClientId, evidence })
-  }
-
-  function changeMerchantClientId(value: string) {
-    setMerchantClientId(value)
-    revalidate({ email, merchantClientId: value, evidence })
-  }
-
-  function changeEvidence(files: File[]) {
-    setEvidence(files)
-    revalidate({ email, merchantClientId, evidence: files })
-  }
-
-  // Back to the form to submit a fresh screenshot (keeps email + id).
-  function retryWithNewPhoto() {
-    setEvidence([])
+  function backToForm(nextMode: Mode, patch?: Partial<FormValues>) {
+    if (patch) setForm((f) => ({ ...f, ...patch }))
+    setMode(nextMode)
     setErrors({})
     setResult(null)
     setSubmitError(null)
     setPhase('form')
+  }
+
+  const resultActions = {
+    retryScreenshot: () => backToForm('screenshot', { evidence: [] }),
+    switchToManual: () => backToForm('manual'),
+    fixManual: () => backToForm('manual'), // keeps the typed details
+    escalate,
   }
 
   return (
@@ -171,15 +215,15 @@ function App() {
           {/* Inner layout box morphs height smoothly as phases swap. */}
           <motion.div layout transition={layoutTransition}>
             <AnimatePresence mode="wait" initial={false}>
-              {phase === 'submitting' && (
+              {phase === 'processing' && (
                 <motion.div
-                  key="submitting"
+                  key={processingKind}
                   variants={phaseVariants}
                   initial="initial"
                   animate="animate"
                   exit="exit"
                 >
-                  <Submitting />
+                  {processingKind === 'ticket' ? <CreatingTicket /> : <Submitting />}
                 </motion.div>
               )}
 
@@ -191,7 +235,11 @@ function App() {
                   animate="animate"
                   exit="exit"
                 >
-                  <Result result={result} onRetry={retryWithNewPhoto} />
+                  <Result
+                    result={result}
+                    actions={resultActions}
+                    email={form.email.trim()}
+                  />
                 </motion.div>
               )}
 
@@ -207,7 +255,7 @@ function App() {
                       state instead of gliding as a persistent, re-centering header. */}
                   <h1 className="text-xl font-semibold text-white">Report a stuck payment</h1>
                   <p className="mt-2 mb-4 text-sm text-gray-400">
-                    Upload a screenshot of your payment and we'll check it right away.
+                    Tell us about your stuck payment and we'll track it down.
                   </p>
                   <form
                     onSubmit={handleSubmit}
@@ -236,10 +284,10 @@ function App() {
                       label="Email"
                       type="email"
                       placeholder="jane@example.com"
-                      value={email}
+                      value={form.email}
                       error={errors.email}
                       shakeNonce={shakeNonce}
-                      onChange={(e) => changeEmail(e.target.value)}
+                      onChange={(v) => setField('email', v)}
                     />
 
                     {!prefill.merchantClientIdLocked && (
@@ -247,30 +295,86 @@ function App() {
                         id="merchantClientId"
                         label="Your account number"
                         hint="This is your account or customer number from the service you used. Not sure where to find it? Check your receipt or confirmation email, or ask the service where you made your payment."
-                        type="text"
                         placeholder="e.g. your account or customer number"
-                        value={merchantClientId}
+                        value={form.merchantClientId}
                         error={errors.merchantClientId}
                         shakeNonce={shakeNonce}
-                        onChange={(e) => changeMerchantClientId(e.target.value)}
+                        onChange={(v) => setField('merchantClientId', v)}
                       />
                     )}
 
-                    <FileField
-                      id="evidence"
-                      label="Payment screenshot(s)"
-                      files={evidence}
-                      error={errors.evidence}
-                      shakeNonce={shakeNonce}
-                      onChange={changeEvidence}
-                    />
+                    <ModeTabs mode={mode} onChange={changeMode} />
+
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.div
+                        key={mode}
+                        variants={tabVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                      >
+                        {mode === 'screenshot' ? (
+                          <FileField
+                            id="evidence"
+                            label="Payment screenshot(s)"
+                            files={form.evidence}
+                            error={errors.evidence}
+                            shakeNonce={shakeNonce}
+                            onChange={(files) => setField('evidence', files)}
+                          />
+                        ) : (
+                          <>
+                            <Field
+                              id="datetime"
+                              label="Date & time of payment"
+                              type="datetime-local"
+                              value={form.datetime}
+                              error={errors.datetime}
+                              shakeNonce={shakeNonce}
+                              onChange={(v) => setField('datetime', v)}
+                            />
+                            <Field
+                              id="upi"
+                              label="UTR / UPI reference number"
+                              hint="A 12-digit number that identifies your payment. In your payment app (GPay, PhonePe, Paytm), open the payment and look for UTR, UPI Ref. No., or transaction ID. This is what we use to trace your money."
+                              placeholder="e.g. 412345678901"
+                              inputMode="numeric"
+                              value={form.upi}
+                              error={errors.upi}
+                              shakeNonce={shakeNonce}
+                              onChange={(v) => setField('upi', v)}
+                            />
+                            <Field
+                              id="amount"
+                              label="Amount (₹)"
+                              placeholder="e.g. 500"
+                              inputMode="decimal"
+                              value={form.amount}
+                              error={errors.amount}
+                              shakeNonce={shakeNonce}
+                              onChange={(v) => setField('amount', v)}
+                            />
+                            <Field
+                              id="description"
+                              label="Anything else?"
+                              optional
+                              multiline
+                              placeholder="Add any details that might help us find it…"
+                              value={form.description}
+                              shakeNonce={shakeNonce}
+                              onChange={(v) => setField('description', v)}
+                            />
+                          </>
+                        )}
+                      </motion.div>
+                    </AnimatePresence>
 
                     <motion.button
                       type="submit"
                       {...buttonMotion}
                       className="mt-2 w-full rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
                     >
-                      Submit evidence
+                      {mode === 'screenshot' ? 'Submit evidence' : 'Submit details'}
                     </motion.button>
                   </form>
                 </motion.div>
@@ -280,6 +384,53 @@ function App() {
         </motion.main>
       </div>
     </MotionConfig>
+  )
+}
+
+function reportInput(form: FormValues, mode: Mode): ReportInput {
+  return {
+    mode,
+    email: form.email.trim(),
+    merchantClientId: form.merchantClientId.trim(),
+    evidence: form.evidence,
+    datetime: form.datetime,
+    upi: form.upi.trim(),
+    amount: form.amount.trim(),
+    description: form.description.trim(),
+  }
+}
+
+function ModeTabs({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  const tabs: { id: Mode; label: string }[] = [
+    { id: 'screenshot', label: 'Upload screenshot' },
+    { id: 'manual', label: 'Type manually' },
+  ]
+  return (
+    <div className="mb-4 flex rounded-xl bg-black/30 p-1">
+      {tabs.map((t) => {
+        const active = mode === t.id
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onChange(t.id)}
+            aria-pressed={active}
+            className={`relative flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 ${
+              active ? 'text-white' : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            {active && (
+              <motion.span
+                layoutId="mode-tab"
+                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                className="absolute inset-0 rounded-lg bg-indigo-500"
+              />
+            )}
+            <span className="relative z-10">{t.label}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -384,14 +535,42 @@ function Submitting() {
   )
 }
 
+function CreatingTicket() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center shadow-xl">
+      <div
+        className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-indigo-400/30 border-t-indigo-400"
+        aria-hidden
+      />
+      <motion.p
+        className="text-sm font-medium text-white"
+        animate={{ opacity: [1, 0.6, 1] }}
+        transition={{ duration: 2, ease: 'easeInOut', repeat: Infinity }}
+      >
+        Creating your support ticket…
+      </motion.p>
+      <p className="mt-1.5 text-sm text-gray-400">This will only take a moment.</p>
+    </div>
+  )
+}
+
+type ResultActions = {
+  retryScreenshot: () => void
+  switchToManual: () => void
+  fixManual: () => void
+  escalate: () => void
+}
+
 function Result({
   result,
-  onRetry,
+  actions,
+  email,
 }: {
-  result: MatchResult
-  onRetry: () => void
+  result: ResultState
+  actions: ResultActions
+  email: string
 }) {
-  if (result.status === 'approved') {
+  if (result.kind === 'approved') {
     return (
       <motion.div
         variants={resultCardVariants}
@@ -412,50 +591,68 @@ function Result({
     )
   }
 
-  if (result.status === 'needs_evidence') {
+  if (result.kind === 'ticket') {
     return (
       <motion.div
         variants={resultCardVariants}
         initial="initial"
         animate="animate"
-        className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6"
+        className="rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-6 text-center"
       >
-        <motion.p variants={staggerItem} className="text-sm font-semibold text-amber-300">
-          We need another screenshot
+        <motion.p variants={staggerItem} className="text-sm font-semibold text-indigo-300">
+          Support ticket created
         </motion.p>
         <motion.p variants={staggerItem} className="mt-1.5 text-sm text-gray-300">
-          {result.message}
+          Our team will review your payment manually and email{' '}
+          <span className="font-semibold break-words text-white">{email}</span> with an
+          update, usually <span className="font-medium text-white">within 24 hours</span>.
         </motion.p>
-        <motion.button
+        <motion.p
           variants={staggerItem}
-          type="button"
-          onClick={onRetry}
-          {...buttonMotion}
-          className="mt-4 w-full rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-amber-400"
+          className="mt-3 border-t border-white/10 pt-3 text-xs text-gray-400"
         >
-          Upload another screenshot
-        </motion.button>
+          Your reference:{' '}
+          <span className="font-mono font-medium text-gray-200">{result.ticketId}</span>
+        </motion.p>
       </motion.div>
     )
   }
 
-  // ticket
+  // unmatched — actions depend on which mode was submitted
+  const screenshot = result.mode === 'screenshot'
   return (
     <motion.div
       variants={resultCardVariants}
       initial="initial"
       animate="animate"
-      className="rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-6 text-center"
+      className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6"
     >
-      <motion.p variants={staggerItem} className="text-sm font-semibold text-indigo-300">
-        We're on it — ticket created
+      <motion.p variants={staggerItem} className="text-sm font-semibold text-amber-300">
+        {screenshot ? "We couldn't match your screenshot" : "We couldn't match your payment"}
       </motion.p>
       <motion.p variants={staggerItem} className="mt-1.5 text-sm text-gray-300">
-        We couldn't match this automatically, so our team will review it. Your
-        reference is{' '}
-        <span className="font-mono font-medium text-white">{result.ticketId}</span>.
-        We'll email you with an update.
+        {screenshot
+          ? "The screenshot didn't give us enough to find your payment. Try a clearer one, or type the details yourself."
+          : "We couldn't find a payment with those details. Double-check them, or send it to our support team."}
       </motion.p>
+      <motion.div variants={staggerItem} className="mt-4 flex flex-col gap-2">
+        <motion.button
+          type="button"
+          onClick={screenshot ? actions.retryScreenshot : actions.fixManual}
+          {...buttonMotion}
+          className="w-full rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-amber-400"
+        >
+          {screenshot ? 'Upload a new screenshot' : 'Check & edit the details'}
+        </motion.button>
+        <motion.button
+          type="button"
+          onClick={screenshot ? actions.switchToManual : actions.escalate}
+          {...buttonMotion}
+          className="w-full rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-gray-200 transition-colors hover:bg-white/5"
+        >
+          {screenshot ? 'Type the details manually' : 'Submit to our support team'}
+        </motion.button>
+      </motion.div>
     </motion.div>
   )
 }
@@ -528,23 +725,29 @@ function HintBadge({ text }: { text: string }) {
 type FieldProps = {
   id: string
   label: string
-  type: string
-  placeholder: string
+  type?: string
+  placeholder?: string
   value: string
   error?: string
   hint?: string
+  optional?: boolean
+  multiline?: boolean
+  inputMode?: React.InputHTMLAttributes<HTMLInputElement>['inputMode']
   shakeNonce: number
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onChange: (value: string) => void
 }
 
 function Field({
   id,
   label,
-  type,
+  type = 'text',
   placeholder,
   value,
   error,
   hint,
+  optional,
+  multiline,
+  inputMode,
   shakeNonce,
   onChange,
 }: FieldProps) {
@@ -559,31 +762,48 @@ function Field({
     }
   }, [shakeNonce, error, controls])
 
+  const inputClass = `w-full rounded-xl border bg-black/30 px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 transition-[color,background-color,border-color,box-shadow] duration-150 ease-out focus:outline-none focus-visible:ring-2 ${
+    error
+      ? 'border-red-500/60 focus-visible:ring-red-500/50'
+      : 'border-white/10 focus-visible:ring-indigo-400/60'
+  }`
+
   return (
     <div className="mb-4">
       {/* Full-width relative wrapper so the popover clamps to the field, never the screen edge. */}
       <div className="relative mb-1.5 flex items-center gap-1.5">
         <label htmlFor={id} className="text-sm font-medium text-gray-300">
           {label}
+          {optional && <span className="ml-1 font-normal text-gray-500">(optional)</span>}
         </label>
         {hint && <HintBadge text={hint} />}
       </div>
-      <motion.input
-        animate={controls}
-        id={id}
-        name={id}
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={onChange}
-        aria-invalid={!!error}
-        aria-describedby={error ? `${id}-error` : undefined}
-        className={`w-full rounded-xl border bg-black/30 px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 transition-[color,background-color,border-color,box-shadow] duration-150 ease-out focus:outline-none focus-visible:ring-2 ${
-          error
-            ? 'border-red-500/60 focus-visible:ring-red-500/50'
-            : 'border-white/10 focus-visible:ring-indigo-400/60'
-        }`}
-      />
+      {multiline ? (
+        <motion.textarea
+          animate={controls}
+          id={id}
+          name={id}
+          rows={3}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${inputClass} resize-none`}
+        />
+      ) : (
+        <motion.input
+          animate={controls}
+          id={id}
+          name={id}
+          type={type}
+          inputMode={inputMode}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={inputClass}
+        />
+      )}
       <FieldError id={id} error={error} />
     </div>
   )
@@ -666,7 +886,7 @@ function FileField({ id, label, files, error, shakeNonce, onChange }: FileFieldP
         </li>
         <li className="flex gap-1.5">
           <span className="text-indigo-400">✓</span>{' '}
-          <span className="font-semibold text-amber-300">UPI transaction ID</span>
+          <span className="font-semibold text-amber-300">UTR / UPI reference number</span>
         </li>
       </ul>
       {/* Native file input is visually hidden (`peer sr-only`) but fully
@@ -733,9 +953,6 @@ function FileField({ id, label, files, error, shakeNonce, onChange }: FileFieldP
           </div>
         </label>
       </motion.div>
-      {/* Always-mounted so the FIRST row animates in like the rest (an empty,
-          conditionally-mounted AnimatePresence skips its first child's enter
-          animation, which made row 1 pop full-height and the card lurch). */}
       <ul>
         <AnimatePresence initial={false}>
           {files.map((f) => (

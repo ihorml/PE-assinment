@@ -32,6 +32,13 @@ export const phaseVariants: Variants = {
   exit: { opacity: 0, y: -6, scale: 0.99, transition: { duration: dur.base, ease: ease.in } },
 }
 
+// Mode tab content swap (screenshot ↔ manual) — snappier than a phase swap.
+export const tabVariants: Variants = {
+  initial: { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0, transition: { duration: dur.base, ease: ease.out } },
+  exit: { opacity: 0, y: -4, transition: { duration: dur.fast, ease: ease.in } },
+}
+
 // Collapsibles in normal flow: field errors, file rows.
 export const collapseVariants: Variants = {
   initial: { opacity: 0, height: 0 },
