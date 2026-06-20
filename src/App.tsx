@@ -211,8 +211,14 @@ function App() {
           <div className="absolute left-1/2 top-[-12%] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#15171d] blur-[130px]" />
         </div>
 
-        {/* Edge-to-edge on mobile (px only); centered focused card on sm+. */}
-        <div className="flex min-h-svh w-full flex-col px-5 pb-32 pt-14 sm:items-center sm:justify-center sm:px-4 sm:pb-10 sm:pt-10">
+        {/* Edge-to-edge on mobile (px only); centered focused card on sm+.
+            The form stays top-aligned (long + has the sticky CTA); the short
+            message screens center vertically. */}
+        <div
+          className={`flex min-h-svh w-full flex-col px-5 sm:items-center sm:justify-center sm:px-4 sm:py-10 ${
+            phase === 'form' ? 'pb-32 pt-14' : 'justify-center py-10'
+          }`}
+        >
           <motion.main
             initial={{ opacity: 0, y: 8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -519,7 +525,7 @@ function Submitting() {
   }, [total])
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 shadow-xl">
+    <div className="p-0 sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/[0.03] sm:p-6 sm:shadow-xl">
       <motion.p
         className="text-sm font-medium text-white"
         animate={{ opacity: [1, 0.6, 1] }}
@@ -571,7 +577,7 @@ function Submitting() {
 
 function CreatingTicket() {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center shadow-xl">
+    <div className="p-0 text-center sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/[0.03] sm:p-6 sm:shadow-xl">
       <div
         className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-indigo-400/30 border-t-indigo-400"
         aria-hidden
@@ -610,7 +616,7 @@ function Result({
         variants={resultCardVariants}
         initial="initial"
         animate="animate"
-        className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center"
+        className="p-0 text-center sm:rounded-2xl sm:border sm:border-emerald-500/30 sm:bg-emerald-500/10 sm:p-6"
       >
         <motion.p variants={emojiPop} className="text-2xl">
           🎉
@@ -631,7 +637,7 @@ function Result({
         variants={resultCardVariants}
         initial="initial"
         animate="animate"
-        className="rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-6 text-center"
+        className="p-0 text-center sm:rounded-2xl sm:border sm:border-indigo-500/30 sm:bg-indigo-500/10 sm:p-6"
       >
         <motion.p variants={staggerItem} className="text-sm font-semibold text-indigo-300">
           Support ticket created
@@ -659,7 +665,7 @@ function Result({
       variants={resultCardVariants}
       initial="initial"
       animate="animate"
-      className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6"
+      className="p-0 sm:rounded-2xl sm:border sm:border-amber-500/30 sm:bg-amber-500/10 sm:p-6"
     >
       <motion.p variants={staggerItem} className="text-sm font-semibold text-amber-300">
         {screenshot ? "We couldn't match your screenshot" : "We couldn't match your payment"}
