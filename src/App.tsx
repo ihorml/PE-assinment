@@ -205,13 +205,20 @@ function App() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className="flex min-h-svh items-center justify-center px-4 py-10">
-        <motion.main
-          initial={{ opacity: 0, y: 8, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: dur.slow, ease: ease.out }}
-          className="w-full max-w-sm"
-        >
+      <div className="relative min-h-svh overflow-x-hidden">
+        {/* Ambient depth — separation without borders. */}
+        <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
+          <div className="absolute left-1/2 top-[-12%] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#15171d] blur-[130px]" />
+        </div>
+
+        {/* Edge-to-edge on mobile (px only); centered focused card on sm+. */}
+        <div className="flex min-h-svh w-full flex-col px-5 pb-32 pt-14 sm:items-center sm:justify-center sm:px-4 sm:pb-10 sm:pt-10">
+          <motion.main
+            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: dur.slow, ease: ease.out }}
+            className="w-full sm:max-w-sm"
+          >
           {/* Inner layout box morphs height smoothly as phases swap. */}
           <motion.div layout transition={layoutTransition}>
             <AnimatePresence mode="wait" initial={false}>
@@ -258,9 +265,10 @@ function App() {
                     Tell us about your stuck payment and we'll track it down.
                   </p>
                   <form
+                    id="reportForm"
                     onSubmit={handleSubmit}
                     noValidate
-                    className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl"
+                    className="border-0 bg-transparent p-0 shadow-none sm:rounded-2xl sm:border sm:border-white/10 sm:bg-white/[0.03] sm:p-6 sm:shadow-xl"
                   >
                     <AnimatePresence initial={false}>
                       {submitError && (
@@ -369,10 +377,11 @@ function App() {
                       </motion.div>
                     </AnimatePresence>
 
+                    {/* Desktop submit lives in the card; mobile uses the sticky CTA. */}
                     <motion.button
                       type="submit"
                       {...buttonMotion}
-                      className="mt-2 w-full rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+                      className="mt-2 hidden w-full rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 sm:block"
                     >
                       {mode === 'screenshot' ? 'Submit evidence' : 'Submit details'}
                     </motion.button>
@@ -381,7 +390,32 @@ function App() {
               )}
             </AnimatePresence>
           </motion.div>
-        </motion.main>
+          </motion.main>
+        </div>
+
+        {/* Sticky CTA on mobile — lives outside the animated tree so `fixed`
+            isn't broken by ancestor transforms; submits via the form attr. */}
+        <AnimatePresence initial={false}>
+          {phase === 'form' && (
+            <motion.div
+              key="mobile-cta"
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 24, opacity: 0 }}
+              transition={{ duration: dur.base, ease: ease.out }}
+              className="fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t from-[#0b0d12] via-[#0b0d12] to-transparent px-5 pt-10 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:hidden"
+            >
+              <motion.button
+                type="submit"
+                form="reportForm"
+                whileTap={{ scale: 0.98 }}
+                className="w-full rounded-xl bg-indigo-500 px-4 py-3.5 text-base font-medium text-white shadow-lg shadow-indigo-500/20 transition-colors hover:bg-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+              >
+                {mode === 'screenshot' ? 'Submit evidence' : 'Submit details'}
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </MotionConfig>
   )
@@ -406,7 +440,7 @@ function ModeTabs({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void 
     { id: 'manual', label: 'Type manually' },
   ]
   return (
-    <div className="mb-4 flex rounded-xl bg-black/30 p-1">
+    <div className="mb-4 flex rounded-xl bg-white/[0.06] p-1">
       {tabs.map((t) => {
         const active = mode === t.id
         return (
@@ -762,10 +796,11 @@ function Field({
     }
   }, [shakeNonce, error, controls])
 
-  const inputClass = `w-full rounded-xl border bg-black/30 px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 transition-[color,background-color,border-color,box-shadow] duration-150 ease-out focus:outline-none focus-visible:ring-2 ${
+  // Filled (borderless) inputs; 16px on mobile so iOS doesn't zoom on focus.
+  const inputClass = `w-full rounded-xl bg-white/[0.06] px-3.5 py-3 text-base text-white placeholder:text-gray-500 transition-[color,background-color,box-shadow] duration-150 ease-out focus:outline-none sm:py-2.5 sm:text-sm ${
     error
-      ? 'border-red-500/60 focus-visible:ring-red-500/50'
-      : 'border-white/10 focus-visible:ring-indigo-400/60'
+      ? 'bg-red-500/[0.07] ring-2 ring-red-500/50'
+      : 'hover:bg-white/[0.09] focus-visible:ring-2 focus-visible:ring-indigo-400/60'
   }`
 
   return (
@@ -924,7 +959,7 @@ function FileField({ id, label, files, error, shakeNonce, onChange }: FileFieldP
               ? 'border-red-500/60 bg-red-500/5 peer-focus-visible:ring-red-500/50'
               : dragOver
                 ? 'border-indigo-400/70 bg-indigo-500/10 peer-focus-visible:ring-indigo-400/60'
-                : 'border-white/15 bg-black/30 hover:border-white/30 hover:bg-white/[0.04] peer-focus-visible:ring-indigo-400/60'
+                : 'border-white/15 bg-white/[0.04] hover:border-white/30 hover:bg-white/[0.07] peer-focus-visible:ring-indigo-400/60'
           }`}
         >
           <div className="pointer-events-none flex items-center gap-3">
@@ -964,7 +999,7 @@ function FileField({ id, label, files, error, shakeNonce, onChange }: FileFieldP
               exit="exit"
               className="overflow-hidden"
             >
-              <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-xs text-gray-300">
+              <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs text-gray-300">
                 <span className="truncate">
                   {f.name} · {(f.size / 1024 / 1024).toFixed(1)} MB
                 </span>
