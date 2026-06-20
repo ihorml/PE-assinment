@@ -5,6 +5,7 @@ import {
   motion,
   useAnimationControls,
 } from 'framer-motion'
+import confetti from 'canvas-confetti'
 import {
   createTicket,
   submitReport,
@@ -17,7 +18,6 @@ import {
   collapseVariants,
   dur,
   ease,
-  emojiPop,
   layoutTransition,
   phaseVariants,
   popoverVariants,
@@ -210,6 +210,24 @@ function App() {
         <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
           <div className="absolute left-1/2 top-[-12%] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#15171d] blur-[130px]" />
         </div>
+
+        {/* Success wash — the whole screen turns green when the payment matches. */}
+        <AnimatePresence>
+          {phase === 'result' && result?.kind === 'approved' && (
+            <motion.div
+              key="success-wash"
+              aria-hidden
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.7, ease: ease.out }}
+              className="pointer-events-none fixed inset-0 -z-10"
+            >
+              <div className="absolute left-1/2 top-[-15%] h-[32rem] w-[42rem] -translate-x-1/2 rounded-full bg-emerald-500/20 blur-[120px]" />
+              <div className="absolute bottom-[-15%] left-1/2 h-[28rem] w-[36rem] -translate-x-1/2 rounded-full bg-emerald-600/15 blur-[120px]" />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Edge-to-edge on mobile (px only); centered focused card on sm+.
             The form stays top-aligned (long + has the sticky CTA); the short
@@ -594,6 +612,80 @@ function CreatingTicket() {
   )
 }
 
+function ApprovedResult() {
+  // A small, tasteful confetti burst once the check has drawn in.
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const t = setTimeout(() => {
+      confetti({
+        particleCount: 55,
+        spread: 70,
+        startVelocity: 32,
+        ticks: 160,
+        scalar: 0.9,
+        origin: { y: 0.38 },
+        colors: ['#34d399', '#10b981', '#6ee7b7', '#a7f3d0', '#ffffff', '#fcd34d'],
+        disableForReducedMotion: true,
+      })
+    }, 450)
+    return () => clearTimeout(t)
+  }, [])
+
+  return (
+    <motion.div
+      variants={resultCardVariants}
+      initial="initial"
+      animate="animate"
+      className="p-0 text-center sm:rounded-2xl sm:border sm:border-emerald-500/30 sm:bg-emerald-500/10 sm:p-6"
+    >
+      <CheckmarkDraw />
+      <motion.p variants={staggerItem} className="mt-3 text-sm font-semibold text-emerald-300">
+        Payment confirmed
+      </motion.p>
+      <motion.p variants={staggerItem} className="mt-1.5 text-sm text-gray-300">
+        We matched your payment — it's all sorted. You're good to go.
+      </motion.p>
+    </motion.div>
+  )
+}
+
+// SVG checkmark that strokes itself on: the ring draws, then the tick.
+function CheckmarkDraw() {
+  return (
+    <motion.svg
+      viewBox="0 0 52 52"
+      className="mx-auto h-16 w-16"
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: dur.base, ease: ease.spring }}
+      aria-hidden
+    >
+      <motion.circle
+        cx="26"
+        cy="26"
+        r="23"
+        fill="none"
+        stroke="#34d399"
+        strokeWidth="3"
+        initial={{ pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.5, ease: 'easeInOut' }}
+      />
+      <motion.path
+        d="M15 27 l7 7 l15 -15"
+        fill="none"
+        stroke="#34d399"
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={{ pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.35, ease: 'easeOut', delay: 0.45 }}
+      />
+    </motion.svg>
+  )
+}
+
 type ResultActions = {
   retryScreenshot: () => void
   switchToManual: () => void
@@ -611,24 +703,7 @@ function Result({
   email: string
 }) {
   if (result.kind === 'approved') {
-    return (
-      <motion.div
-        variants={resultCardVariants}
-        initial="initial"
-        animate="animate"
-        className="p-0 text-center sm:rounded-2xl sm:border sm:border-emerald-500/30 sm:bg-emerald-500/10 sm:p-6"
-      >
-        <motion.p variants={emojiPop} className="text-2xl">
-          🎉
-        </motion.p>
-        <motion.p variants={staggerItem} className="mt-2 text-sm font-semibold text-emerald-300">
-          Payment confirmed
-        </motion.p>
-        <motion.p variants={staggerItem} className="mt-1.5 text-sm text-gray-300">
-          We matched your payment — it's all sorted. You're good to go.
-        </motion.p>
-      </motion.div>
-    )
+    return <ApprovedResult />
   }
 
   if (result.kind === 'ticket') {
