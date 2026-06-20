@@ -17,3 +17,18 @@ body {
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* iOS Safari gives date/time inputs a fixed intrinsic width (overflows the
+   field) and a short native value height that ignores our padding. Strip the
+   native appearance so `width: 100%` applies, and normalize the value box so
+   the field matches the other inputs. */
+input[type='datetime-local'] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type='datetime-local']::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+  min-height: 1.5em;
+}
